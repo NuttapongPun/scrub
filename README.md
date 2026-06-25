@@ -4,8 +4,8 @@ A tiny macOS menu-bar app that puts your Mac into **cleaning mode** — it locks
 trackpad, and/or dims the screen so you can safely wipe the machine (or do your makeup at the
 desk) without typing garbage, moving the cursor, or triggering shortcuts.
 
-To end a session you press a **multi-key chord** — by default the eight home-row keys
-`a s d f j k l ;` all at once. A stray swipe of a cloth can't trigger it, so wiping across
+To end a session you press a **multi-key chord** — by default **⌘ + ⌥ + Q** (hold both
+modifiers, then press Q). A stray swipe of a cloth can't trigger it, so wiping across
 the keyboard is always safe.
 
 ---
@@ -27,11 +27,11 @@ cleaning time when you're done, then gets out of the way.
   - Lock the **trackpad / mouse**
   - **Black out** the screen
 - **Start cleaning** — applies your locks and blacks out the screen so smudges are easy to
-  see. After a moment a dim *"press `a s d f j k l ;` to stop"* hint fades in, so you always
+  see. After a moment a dim *"press `⌘ ⌥ Q` to stop"* hint fades in, so you always
   know the way out.
 - **Cleaning time** — Scrub times each session and shows the **total when you finish**.
 - **Safe unlock chord** — end a session only by pressing a set of keys **simultaneously**
-  (default `a s d f j k l ;`). A chord, not a sequence, so partial or accidental contact
+  (default **⌘ + ⌥ + Q**). A chord, not a sequence, so partial or accidental contact
   never unlocks.
 - **You can never get stuck** — see *Staying safe* below.
 - **History** — review your past cleans and total time from the menu.
@@ -44,17 +44,18 @@ cleaning time when you're done, then gets out of the way.
 2. Click it and choose what to lock (keyboard / trackpad / black out the screen).
 3. Choose **Start Cleaning**. The screen goes dark and your selected input freezes.
 4. Wipe away — keys and the trackpad do nothing.
-5. To finish, press **`a s d f j k l ;` together**. Everything unlocks and Scrub shows your
+5. To finish, press **`⌘ ⌥ Q` together**. Everything unlocks and Scrub shows your
    total cleaning time.
 
 ---
 
 ## The unlock chord
 
-- **Default:** `a s d f j k l ;` — the eight home-row keys, pressed at the same time.
+- **Default:** **⌘ + ⌥ + Q** — hold Command and Option, then press Q.
 - It's matched by **key position**, so it works on any keyboard layout or language.
 - Chosen because it's nearly impossible to trigger by dragging a cloth, but trivial to do on
-  purpose with two hands.
+  purpose — and because modifier keys never "ghost," it reliably registers on any keyboard
+  (unlike multi-key letter chords, which many keyboards can't report all at once).
 
 ---
 

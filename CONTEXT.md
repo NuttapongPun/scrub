@@ -19,7 +19,7 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   reminder cards — but **no live timer**. See
   [ADR-0006](docs/adr/0006-overlay-presentation-no-live-timer.md).
 
-- **Stop-hint card** — the dim `press a s d f j k l ; to stop` card on the blackout. Starts
+- **Stop-hint card** — the dim `press ⌘ ⌥ Q to stop` card on the blackout. Starts
   hidden and fades in after ~3–5 s (or on key activity) for discoverability without spoiling
   the "screen off" look.
 
@@ -31,10 +31,12 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   "History…" menu item with aggregate totals. `endedBy` is one of `chord`, `forceEnd`,
   `failOpen`. See [ADR-0007](docs/adr/0007-persistence-settings-and-session-history.md).
 
-- **Unlock chord** — the set of keys that must be held **simultaneously** to end a session
-  (default `a s d f j k l ;`). A *chord*, not a sequence: partial or accidental contact
-  never unlocks. Matched by **physical keycode** (not character), so layout/input source
-  can't break it. Detected by the event tap *before* the key is swallowed, so it works even
+- **Unlock chord** — the keys that must be held **simultaneously** to end a session (default
+  **⌘ + ⌥ + Q**: hold both modifiers, then press Q). Letter-only chords ghosted on real
+  keyboards; modifiers never ghost, so the chord is one letter key plus modifiers — see
+  ADR-0002's amendment. A *chord*, not a sequence: partial or accidental contact never
+  unlocks. Matched by **physical keycode + modifier flags** (not character), so layout/input
+  source can't break it. Detected by the event tap *before* the key is swallowed, so it works even
   while the keyboard is fully locked, and it is the **universal exit** from every session.
   See [ADR-0002](docs/adr/0002-chord-detection-by-physical-keycode.md).
 

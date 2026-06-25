@@ -1,7 +1,28 @@
 # ADR-0002: Chord detection by physical keycode, tap always watches the keyboard
 
-- Status: Accepted
+- Status: Accepted (amended 2026-06-26 — chord changed from a letter chord to ⌘+⌥+Q)
 - Date: 2026-06-26
+
+## Amendment (2026-06-26): chord changed to **⌘ + ⌥ + Q** due to keyboard ghosting
+
+A multi-key *letter* chord proved **physically undetectable** on real hardware. The original
+`a s d f j k l ;` are adjacent same-row keys — the worst case for keyboard **ghosting /
+rollover**; the first test machine never reported more than one held at once. Moving to four
+corner keys `q p z /` didn't help: the same keyboard tops out at **two simultaneous letter
+keys** (the tap saw `[6, 44]` / `[35, 44]` and never three), with ghosting forcing phantom
+key-ups. The rollover limit is the *count*, not the position, so no letter-only chord of 3+
+keys can work on this class of keyboard.
+
+The new default chord is **⌘ + ⌥ + Q**: hold both modifiers, then press Q. **Modifier keys
+sit on dedicated matrix lines and never ghost**, and a single letter key can't exceed
+rollover — so modifier-plus-one-key is reliable on any keyboard. It stays hard to trigger by
+a dragged cloth (two modifiers *and* a letter at once) and is matched by physical keycode
+(`kVK_ANSI_Q` = 12) plus modifier flags, preserving the layout-independence below.
+
+This changes the matching mechanism: modifiers are read from each event's `CGEventFlags`
+(always reported, never ghost) rather than tracked as a held *set* of keycodes. The
+always-on-tap decision and physical-keycode principle are unchanged. On-screen hints read
+`⌘ ⌥ Q`. Issue #9 (configurable chord) supersedes this hardcoded default.
 
 ## Context
 
