@@ -11,7 +11,9 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
 
 - **Lock** — actively swallowing a class of input so it never reaches the OS. Scrub locks
   the **keyboard** and/or the **trackpad/mouse**, selected per session. "Locked" describes a
-  session whose locks are currently applied.
+  session whose locks are currently applied. The selection (along with dim) is persisted in
+  `UserDefaults` ([ADR-0007](docs/adr/0007-persistence-settings-and-session-history.md)); the
+  first-run default is **everything on** — keyboard, pointer, and dim all locked.
 
 - **Dim** — drawing a black, click-through overlay across every display (a **total
   blackout**, covering the menu bar). Separate, optional, and independent from locking (you
@@ -19,7 +21,7 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   reminder cards — but **no live timer**. See
   [ADR-0006](docs/adr/0006-overlay-presentation-no-live-timer.md).
 
-- **Stop-hint card** — the dim `press a s d f j k l ; to stop` card on the blackout. Starts
+- **Stop-hint card** — the dim `press ⌘ ⌥ Q to stop` card on the blackout. Starts
   hidden and fades in after ~3–5 s (or on key activity) for discoverability without spoiling
   the "screen off" look.
 
@@ -31,10 +33,12 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   "History…" menu item with aggregate totals. `endedBy` is one of `chord`, `forceEnd`,
   `failOpen`. See [ADR-0007](docs/adr/0007-persistence-settings-and-session-history.md).
 
-- **Unlock chord** — the set of keys that must be held **simultaneously** to end a session
-  (default `a s d f j k l ;`). A *chord*, not a sequence: partial or accidental contact
-  never unlocks. Matched by **physical keycode** (not character), so layout/input source
-  can't break it. Detected by the event tap *before* the key is swallowed, so it works even
+- **Unlock chord** — the keys that must be held **simultaneously** to end a session (default
+  **⌘ + ⌥ + Q**: hold both modifiers, then press Q). Letter-only chords ghosted on real
+  keyboards; modifiers never ghost, so the chord is one letter key plus modifiers — see
+  ADR-0002's amendment. A *chord*, not a sequence: partial or accidental contact never
+  unlocks. Matched by **physical keycode + modifier flags** (not character), so layout/input
+  source can't break it. Detected by the event tap *before* the key is swallowed, so it works even
   while the keyboard is fully locked, and it is the **universal exit** from every session.
   See [ADR-0002](docs/adr/0002-chord-detection-by-physical-keycode.md).
 
@@ -43,7 +47,8 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   See [ADR-0001](docs/adr/0001-fail-open-failsafe-philosophy.md).
 
 - **Check-in interval** — how long a session stays locked + dimmed before the reminder
-  fires (default 10 min). Reset every time the user acknowledges. Configurable.
+  fires (default 10 min). Reset every time the user acknowledges. Configurable via
+  `UserDefaults` (no settings UI yet).
 
 - **Reminder stage** — a recurring **dead-man's-switch** liveness check (not a "forgot the
   chord" notice): at each check-in interval the screen brightens and a pop-up asks "Still
@@ -56,7 +61,7 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   falsely keep a session locked.
 
 - **Acknowledgement grace** — how long the reminder may stay unacknowledged before force-end
-  (default 5 min). Configurable.
+  (default 5 min). Configurable via `UserDefaults` (no settings UI yet).
 
 - **Hard-unlock / force-end** — the last-resort failsafe: if the reminder goes unacknowledged
   for the full grace window, Scrub force-releases all locks and ends the session no matter
