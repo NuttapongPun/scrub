@@ -11,7 +11,9 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
 
 - **Lock** — actively swallowing a class of input so it never reaches the OS. Scrub locks
   the **keyboard** and/or the **trackpad/mouse**, selected per session. "Locked" describes a
-  session whose locks are currently applied.
+  session whose locks are currently applied. The selection (along with dim) is persisted in
+  `UserDefaults` ([ADR-0007](docs/adr/0007-persistence-settings-and-session-history.md)); the
+  first-run default is **everything on** — keyboard, pointer, and dim all locked.
 
 - **Dim** — drawing a black, click-through overlay across every display (a **total
   blackout**, covering the menu bar). Separate, optional, and independent from locking (you

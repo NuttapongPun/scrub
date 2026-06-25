@@ -8,7 +8,7 @@ private let log = Logger(subsystem: "com.nuttapongpun.scrub", category: "InputBl
 /// M1, so this currently only drives logging and menu state.
 enum EndReason {
     case chord      // user pressed the unlock chord
-    case forceEnd   // hard-unlock timer fired
+    case forceEnd   // failsafe force-ended (unacknowledged reminder grace, ADR-0005)
     case failOpen   // OS force-disabled the tap (ADR-0001)
     case manual     // app is quitting
 }
@@ -30,6 +30,13 @@ final class InputBlocker {
     private static let unlockKey: CGKeyCode = 12
     private static let unlockModifiers: CGEventFlags = [.maskCommand, .maskAlternate]
 
+    /// The acknowledge ("still cleaning") chord: **hold O + K together** (`kVK_ANSI_O` = 31,
+    /// `kVK_ANSI_K` = 40), the dead-man's-switch ack (ADR-0005, mnemonic "press OK"). Two
+    /// letter keys is within every keyboard's rollover (ADR-0002's amendment notes at most two
+    /// simultaneous letters were reliably reported), so unlike a longer letter chord this one
+    /// is detectable. Matched by tracking which of these keycodes are currently held.
+    private static let ackKeys: Set<CGKeyCode> = [31, 40]
+
     /// Called when the session ends, on the main thread. The keyboard is already released by
     /// the time this fires.
     var onSessionEnd: ((EndReason) -> Void)?
@@ -38,6 +45,21 @@ final class InputBlocker {
     /// its stop-hint immediately on key activity (ADR-0006). The keyboard stays locked — this
     /// is observation only, and the overlay de-dupes repeated calls.
     var onKeyActivity: (() -> Void)?
+
+    /// Called on the main thread when the O+K ack chord is held (ADR-0005). Fires regardless of
+    /// session state; the delegate ignores it unless a reminder is currently showing. The lock
+    /// is unaffected — acknowledging keeps the machine protected and continues cleaning.
+    var onAckChord: (() -> Void)?
+
+    /// The subset of `ackKeys` physically held right now, so the ack chord fires once both are
+    /// down. Cleared on `stop()`; `keyUp` removes a key even when the keyboard is locked (the
+    /// event is still tapped, only swallowed after we observe it).
+    private var heldAckKeys: Set<CGKeyCode> = []
+
+    /// Whether the keyboard is being swallowed this session. The tap always watches key events
+    /// — the unlock and ack chords must work even in a pointer-only or dim-only session — but
+    /// when keyboard lock is off, observed key events are passed through instead of consumed.
+    private var keyboardLocked = false
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -78,13 +100,14 @@ final class InputBlocker {
         .scrollWheel,
     ]
 
-    /// Installs the tap and begins swallowing keyboard input. When `lockPointer` is true, the
-    /// tap also swallows all pointer events from all devices (ADR-0004); the unlock chord is
-    /// then the only exit, since the menu-bar Quit becomes unreachable. Returns `false` if the
-    /// tap could not be created (e.g. Accessibility not granted), in which case nothing is
-    /// locked.
+    /// Installs the tap. When `lockKeyboard` is true, keyboard input is swallowed; when
+    /// `lockPointer` is true, the tap also swallows all pointer events from all devices
+    /// (ADR-0004), making the chord the only exit since the menu-bar Quit becomes unreachable.
+    /// The tap always *watches* the keyboard regardless, so the unlock and ack chords work even
+    /// in a pointer-only or dim-only session. Returns `false` if the tap could not be created
+    /// (e.g. Accessibility not granted), in which case nothing is locked.
     @discardableResult
-    func start(lockPointer: Bool) -> Bool {
+    func start(lockKeyboard: Bool, lockPointer: Bool) -> Bool {
         guard eventTap == nil else { return true }
 
         var mask: CGEventMask =
@@ -132,9 +155,12 @@ final class InputBlocker {
             pointerDecoupled = true
         }
 
+        keyboardLocked = lockKeyboard
         eventTap = tap
         runLoopSource = source
-        log.info("Input lock started (pointer locked: \(lockPointer, privacy: .public))")
+        log.info(
+            "Input lock started (keyboard: \(lockKeyboard, privacy: .public), pointer: \(lockPointer, privacy: .public))"
+        )
         return true
     }
 
@@ -154,6 +180,8 @@ final class InputBlocker {
             CGAssociateMouseAndMouseCursorPosition(1)
             pointerDecoupled = false
         }
+        keyboardLocked = false
+        heldAckKeys.removeAll()
         if let activity {
             ProcessInfo.processInfo.endActivity(activity)
             self.activity = nil
@@ -171,16 +199,28 @@ final class InputBlocker {
             return nil
         }
 
-        // Unlock chord: Q pressed while ⌘+⌥ are held. Modifiers are read from the event's
-        // flags (always reported accurately, never ghost), so there's no multi-key tracking.
         if type == .keyDown {
             let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+            // Unlock chord: Q pressed while ⌘+⌥ are held. Modifiers come from the event's flags
+            // (always accurate, never ghost), so there's no multi-key tracking for this one.
             if keyCode == Self.unlockKey && event.flags.contains(Self.unlockModifiers) {
                 log.info("Unlock chord matched")
                 DispatchQueue.main.async { [weak self] in self?.end(reason: .chord) }
             }
+            // Ack chord: O and K held together (ADR-0005). Track held keycodes and fire once
+            // both are down. The delegate decides whether an ack is meaningful right now.
+            if Self.ackKeys.contains(keyCode) {
+                heldAckKeys.insert(keyCode)
+                if heldAckKeys == Self.ackKeys {
+                    log.info("Ack chord matched")
+                    DispatchQueue.main.async { [weak self] in self?.onAckChord?() }
+                }
+            }
             // Any key press is "key activity": let the overlay surface the stop-hint at once.
             DispatchQueue.main.async { [weak self] in self?.onKeyActivity?() }
+        } else if type == .keyUp {
+            let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+            heldAckKeys.remove(keyCode)
         }
 
         // Pointer locked: pin the cursor. Disassociation can lapse as events flow, so warp it
@@ -189,8 +229,15 @@ final class InputBlocker {
             CGWarpMouseCursorPosition(lockedCursorPosition)
         }
 
-        // Input is locked: swallow every tapped event — every key event, and (when pointer
-        // lock is on) every pointer event in `pointerEventTypes` (ADR-0004).
+        // Pass keyboard events through when the keyboard isn't locked — the tap still watched
+        // them above so the chords work, but a dim-only or pointer-only session must let the
+        // user keep typing. Everything else (locked keyboard, and all tapped pointer events
+        // when pointer lock is on) is swallowed.
+        let isKeyEvent =
+            type == .keyDown || type == .keyUp || type == .flagsChanged
+        if isKeyEvent && !keyboardLocked {
+            return Unmanaged.passUnretained(event)
+        }
         return nil
     }
 
@@ -202,7 +249,7 @@ final class InputBlocker {
         onSessionEnd?(reason)
     }
 
-    /// Force-ends an active session for the given reason (used by the hard-unlock timer and
+    /// Force-ends an active session for the given reason (used by the failsafe grace timer and
     /// by the menu-bar Quit). No-op if nothing is locked.
     func forceEnd(reason: EndReason) {
         end(reason: reason)

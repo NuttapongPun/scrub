@@ -41,7 +41,8 @@ cleaning time when you're done, then gets out of the way.
 ## How to use
 
 1. Launch Scrub — a 🧽 icon appears in the menu bar.
-2. Click it and choose what to lock (keyboard / trackpad / black out the screen).
+2. Click it and choose what to lock (keyboard / trackpad / black out the screen). By default
+   all three are on; your choices are remembered for next time.
 3. Choose **Start Cleaning**. The screen goes dark and your selected input freezes.
 4. Wipe away — keys and the trackpad do nothing.
 5. To finish, press **`⌘ ⌥ Q` together**. Everything unlocks and Scrub shows your

@@ -3,13 +3,18 @@ import ApplicationServices
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
-    /// M1 failsafe: a single hardcoded hard-unlock timer that force-ends a session no matter
-    /// what (issue #2). Replaced by the configurable dead-man's-switch in a later milestone.
-    private static let hardUnlockSeconds: TimeInterval = 30
+    /// The two states of the dead-man's-switch failsafe loop (ADR-0005). `active` is locked +
+    /// (optionally) dimmed; `reminder` keeps every lock applied but lifts the dim and shows the
+    /// "Still cleaning? press O+K" card while waiting for an acknowledgement.
+    private enum SessionState { case active, reminder }
 
     private var statusItem: NSStatusItem!
     private let cleaningItem = NSMenuItem(
         title: "Start Cleaning", action: #selector(toggleCleaning), keyEquivalent: ""
+    )
+    private let lockKeyboardItem = NSMenuItem(
+        title: "Lock Keyboard",
+        action: #selector(toggleLockKeyboard), keyEquivalent: ""
     )
     private let lockPointerItem = NSMenuItem(
         title: "Lock Pointer (Trackpad & Mouse)",
@@ -20,15 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         action: #selector(toggleDim), keyEquivalent: ""
     )
 
-    /// Whether the next session should also lock the pointer (ADR-0004). A simple in-memory
-    /// menu toggle for this slice; persistence and a configurable default land in issue #6.
-    /// Read at session start, so toggling mid-session has no effect on the running session.
-    private var lockPointerEnabled = false
-
-    /// Whether the next session blacks out every display (ADR-0006). A simple in-memory menu
-    /// toggle for this slice; persistence lands in issue #6. Read at session start, like
-    /// `lockPointerEnabled`. Defaults on — dimming is the headline behavior.
-    private var dimEnabled = true
+    /// Persisted lock selections and failsafe timers (ADR-0007). The menu toggles write here;
+    /// `startCleaning` reads it, so toggling mid-session has no effect on the running session.
+    private var settings = Settings()
 
     private let inputBlocker = InputBlocker()
     private let dimOverlay = DimOverlay()
@@ -36,9 +35,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Background timing for the running session (ADR-0006). Set at start, read once on end to
     /// show the total cleaning time; `nil` when no session is active. Never rendered live.
     private var sessionClock: SessionClock?
-    // A GCD timer, not an NSTimer: it wakes the run loop at its deadline on its own, so it
-    // fires on time even while the app sits idle for the full window with no input events.
-    private var hardUnlockTimer: DispatchSourceTimer?
+
+    /// Failsafe state for the running session (ADR-0005). The interval/grace/dim values are
+    /// snapshotted at start from `settings` so a mid-session preference change can't perturb
+    /// the running loop. GCD timers (not `NSTimer`) so they wake the run loop at their deadline
+    /// even while the app sits idle with no input events for the full window.
+    private var sessionState: SessionState = .active
+    private var sessionDim = false
+    private var checkInInterval: TimeInterval = 600
+    private var graceInterval: TimeInterval = 300
+    private var checkInTimer: DispatchSourceTimer?
+    private var graceTimer: DispatchSourceTimer?
 
     private var isCleaning: Bool { inputBlocker.isLocked }
 
@@ -50,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         inputBlocker.onKeyActivity = { [weak self] in
             self?.dimOverlay.revealStopHint()
+        }
+        inputBlocker.onAckChord = { [weak self] in
+            self?.acknowledgeReminder()
         }
 
         // ADR-0003: gate on Accessibility at launch. Untrusted → guide the user, then require
@@ -68,11 +78,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         cleaningItem.target = self
         menu.addItem(cleaningItem)
+        menu.addItem(.separator())
+        lockKeyboardItem.target = self
+        menu.addItem(lockKeyboardItem)
         lockPointerItem.target = self
-        lockPointerItem.state = lockPointerEnabled ? .on : .off
         menu.addItem(lockPointerItem)
         dimItem.target = self
-        dimItem.state = dimEnabled ? .on : .off
         menu.addItem(dimItem)
         menu.addItem(.separator())
         menu.addItem(
@@ -80,21 +91,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         menu.items.last?.target = self
         statusItem.menu = menu
+        updateMenu()
     }
 
     private func updateMenu() {
         cleaningItem.title = isCleaning ? "Stop Cleaning" : "Start Cleaning"
-        lockPointerItem.state = lockPointerEnabled ? .on : .off
-        dimItem.state = dimEnabled ? .on : .off
+        lockKeyboardItem.state = settings.lockKeyboard ? .on : .off
+        lockPointerItem.state = settings.lockPointer ? .on : .off
+        dimItem.state = settings.dim ? .on : .off
+    }
+
+    @objc private func toggleLockKeyboard() {
+        settings.lockKeyboard.toggle()
+        updateMenu()
     }
 
     @objc private func toggleLockPointer() {
-        lockPointerEnabled.toggle()
+        settings.lockPointer.toggle()
         updateMenu()
     }
 
     @objc private func toggleDim() {
-        dimEnabled.toggle()
+        settings.dim.toggle()
         updateMenu()
     }
 
@@ -118,7 +136,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        guard inputBlocker.start(lockPointer: lockPointerEnabled) else {
+        guard inputBlocker.start(
+            lockKeyboard: settings.lockKeyboard, lockPointer: settings.lockPointer
+        ) else {
             showAlert(
                 title: "Couldn't start cleaning",
                 message: "Scrub couldn't install the input lock. Make sure Accessibility "
@@ -127,26 +147,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + Self.hardUnlockSeconds, leeway: .milliseconds(100))
-        timer.setEventHandler { [weak self] in
-            self?.inputBlocker.forceEnd(reason: .forceEnd)
-        }
-        timer.resume()
-        hardUnlockTimer = timer
+        // Snapshot the failsafe config so a mid-session preference edit can't shift the loop.
+        sessionDim = settings.dim
+        checkInInterval = settings.checkInInterval
+        graceInterval = settings.grace
+        sessionState = .active
 
         // Background-only timing (ADR-0006): start the clock; the total is shown on end.
         sessionClock = SessionClock()
-        if dimEnabled {
+        if sessionDim {
             dimOverlay.start()
         }
+        scheduleCheckIn()
 
         updateMenu()
     }
 
+    // MARK: - Dead-man's-switch failsafe (ADR-0005)
+
+    /// (Re)arms the check-in interval. After it elapses without any end, the session enters the
+    /// reminder state and asks the user to prove they're still there.
+    private func scheduleCheckIn() {
+        checkInTimer?.cancel()
+        checkInTimer = makeOneShotTimer(after: checkInInterval) { [weak self] in
+            self?.enterReminder()
+        }
+    }
+
+    /// Check-in interval elapsed: keep every lock applied, lift the dim, show the "Still
+    /// cleaning? press O+K" card, and start the grace countdown to force-end (ADR-0005).
+    private func enterReminder() {
+        guard isCleaning, sessionState == .active else { return }
+        sessionState = .reminder
+        dimOverlay.enterReminder()
+        graceTimer = makeOneShotTimer(after: graceInterval) { [weak self] in
+            // Unacknowledged for the full grace window → force-end and unlock everything.
+            self?.inputBlocker.forceEnd(reason: .forceEnd)
+        }
+    }
+
+    /// O+K acknowledgement (ADR-0005): re-dim, cancel the grace countdown, and restart the
+    /// check-in interval, looping indefinitely. Ignored unless a reminder is actually showing.
+    private func acknowledgeReminder() {
+        guard isCleaning, sessionState == .reminder else { return }
+        graceTimer?.cancel()
+        graceTimer = nil
+        sessionState = .active
+        dimOverlay.resumeActive(toDim: sessionDim)
+        scheduleCheckIn()
+    }
+
     private func handleSessionEnd(_ reason: EndReason) {
-        hardUnlockTimer?.cancel()
-        hardUnlockTimer = nil
+        checkInTimer?.cancel()
+        checkInTimer = nil
+        graceTimer?.cancel()
+        graceTimer = nil
+        sessionState = .active
 
         // Read the background timer once, on end, and show the total cleaning time (issue #5).
         let totalText = sessionClock?.totalText()
@@ -159,6 +215,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if let totalText {
             showTotalCleaningTime(totalText)
         }
+    }
+
+    /// A one-shot main-queue GCD timer that fires once after `seconds` and then is owned by the
+    /// caller (kept alive in a property, cancelled on end). Leeway keeps it power-friendly.
+    private func makeOneShotTimer(
+        after seconds: TimeInterval, _ handler: @escaping () -> Void
+    ) -> DispatchSourceTimer {
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + seconds, leeway: .milliseconds(100))
+        timer.setEventHandler(handler: handler)
+        timer.resume()
+        return timer
     }
 
     /// Shows the session's total cleaning time when there's no overlay to host it (dim off).

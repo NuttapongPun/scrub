@@ -10,10 +10,15 @@ import AppKit
 /// exit. There is **no live timer** (ADR-0006): elapsed time is background-only and shown as a
 /// total when the session ends.
 ///
-/// Un-dim is modelled as an opacity change on persistent windows, not a teardown, so a later
-/// slice can reuse the same windows to host the reminder card (ADR-0005). For this slice the
-/// only opacity changes are the stop-hint fade-in and the end-of-session summary fade-out.
+/// At the **reminder** stage (ADR-0005) the same windows brighten (an opacity lift, not a
+/// teardown) and host the *"Still cleaning? press O + K"* card; acknowledging re-dims them.
+/// A reminder can also build the windows on demand for a session that wasn't dimming, so the
+/// dead-man's-switch always has somewhere to show the card.
 final class DimOverlay {
+
+    /// Active-state vs reminder-state presentation. The blackout windows persist across the
+    /// transition (ADR-0006); only their opacity and the on-screen card change.
+    private enum Mode { case active, reminder }
 
     /// How long the blackout stays hint-free before the stop-hint fades in (ADR-0006: ~3–5 s).
     private static let stopHintDelay: TimeInterval = 4
@@ -22,6 +27,13 @@ final class DimOverlay {
     /// amendment). Issue #4's `a s d f j k l ;` wording predates that amendment.
     private static let stopHintText = "press ⌘ ⌥ Q to stop"
 
+    /// The reminder card copy (ADR-0005). Mnemonic: pressing O+K literally spells "OK".
+    private static let reminderText = "Still cleaning?   press O + K to continue"
+
+    /// Window opacity while a reminder shows: lifted off full black so the desktop glows
+    /// through and the card clearly reads as "the screen woke up" (ADR-0005/0006 "brighten").
+    private static let reminderWindowAlpha: CGFloat = 0.55
+
     /// How long the end-of-session total lingers on the blackout before it fades out.
     private static let summaryHold: TimeInterval = 1.6
 
@@ -29,8 +41,12 @@ final class DimOverlay {
     private var hintLabels: [NSTextField] = []
     private var revealTimer: DispatchSourceTimer?
 
-    /// Whether the stop-hint has been revealed. Tracked separately from the labels so a
-    /// mid-session display reconfiguration can rebuild the windows in the right state.
+    /// Current presentation. Tracked separately from the windows so a mid-session display
+    /// reconfiguration rebuilds them in the right mode.
+    private var mode: Mode = .active
+
+    /// Whether the stop-hint has been revealed (active mode only). Tracked separately from the
+    /// labels so a mid-session display reconfiguration can rebuild the windows in the right state.
     private var hintRevealed = false
 
     var isActive: Bool { !windows.isEmpty }
@@ -40,12 +56,43 @@ final class DimOverlay {
     /// Blacks out every connected display and schedules the stop-hint fade-in. Idempotent.
     func start() {
         guard windows.isEmpty else { return }
+        mode = .active
+        registerScreenObserver()
         buildWindows()
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(screensChanged),
-            name: NSApplication.didChangeScreenParametersNotification, object: nil
-        )
         scheduleHintReveal()
+    }
+
+    /// Enters the reminder presentation (ADR-0005): brighten the blackout and show the
+    /// *"Still cleaning? press O + K"* card. If no overlay exists — a session that wasn't
+    /// dimming — the windows are built fresh in reminder mode so the card still has a home.
+    func enterReminder() {
+        mode = .reminder
+        revealTimer?.cancel()
+        revealTimer = nil
+        if windows.isEmpty {
+            registerScreenObserver()
+            buildWindows()
+            return
+        }
+        for label in hintLabels { configure(label) }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.5
+            for window in windows { window.animator().alphaValue = Self.reminderWindowAlpha }
+        }
+    }
+
+    /// Returns to the active presentation after an O+K acknowledgement (ADR-0005). When the
+    /// session is dimming, re-dims to full black and restarts the stop-hint reveal; otherwise
+    /// the windows existed only to host the card, so they're torn down.
+    func resumeActive(toDim: Bool) {
+        guard toDim else { teardown(); return }
+        mode = .active
+        hintRevealed = false
+        for label in hintLabels { configure(label) }   // back to the hidden stop-hint
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.5
+            for window in windows { window.animator().alphaValue = 1 }
+        }, completionHandler: { [weak self] in self?.scheduleHintReveal() })
     }
 
     /// Fades the stop-hint in across all displays. Called on the delay timer or immediately on
@@ -70,6 +117,8 @@ final class DimOverlay {
         revealTimer = nil
         hintRevealed = true
 
+        // The summary always shows on full black, even if a reminder had brightened the windows.
+        for window in windows { window.alphaValue = 1 }
         for label in hintLabels {
             label.stringValue = totalText
             label.alphaValue = 1
@@ -114,9 +163,9 @@ final class DimOverlay {
                 .canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle,
             ]
             window.setFrame(screen.frame, display: true)
+            window.alphaValue = mode == .reminder ? Self.reminderWindowAlpha : 1
 
             let label = makeHintLabel()
-            label.alphaValue = hintRevealed ? 1 : 0    // preserve state across rebuilds
             let content = window.contentView!
             content.addSubview(label)
             label.translatesAutoresizingMaskIntoConstraints = false
@@ -134,20 +183,44 @@ final class DimOverlay {
     }
 
     private func makeHintLabel() -> NSTextField {
-        let label = NSTextField(labelWithString: Self.stopHintText)
-        label.font = .systemFont(ofSize: 28, weight: .medium)
-        label.textColor = NSColor.white.withAlphaComponent(0.35)   // dim, not stark
+        let label = NSTextField(labelWithString: "")
         label.alignment = .center
         label.isBezeled = false
         label.isEditable = false
         label.isSelectable = false
         label.drawsBackground = false
+        configure(label)
         return label
     }
 
+    /// Sets a label's copy, styling, and visibility for the current mode. In active mode the
+    /// stop-hint is dim and hidden until revealed; in reminder mode the card is bright and
+    /// always shown. Called on build and on every mode transition.
+    private func configure(_ label: NSTextField) {
+        switch mode {
+        case .active:
+            label.stringValue = Self.stopHintText
+            label.font = .systemFont(ofSize: 28, weight: .medium)
+            label.textColor = NSColor.white.withAlphaComponent(0.35)   // dim, not stark
+            label.alphaValue = hintRevealed ? 1 : 0
+        case .reminder:
+            label.stringValue = Self.reminderText
+            label.font = .systemFont(ofSize: 34, weight: .semibold)
+            label.textColor = .white
+            label.alphaValue = 1
+        }
+    }
+
+    private func registerScreenObserver() {
+        let center = NotificationCenter.default
+        let name = NSApplication.didChangeScreenParametersNotification
+        center.removeObserver(self, name: name, object: nil)   // idempotent
+        center.addObserver(self, selector: #selector(screensChanged), name: name, object: nil)
+    }
+
     /// Rebuilds the blackout when the display configuration changes mid-session (a monitor is
-    /// plugged in or unplugged), so every connected display stays covered. The revealed/hidden
-    /// stop-hint state carries over via `hintRevealed`.
+    /// plugged in or unplugged), so every connected display stays covered. The active/reminder
+    /// mode and revealed/hidden stop-hint state carry over via `mode` and `hintRevealed`.
     @objc private func screensChanged() {
         guard isActive else { return }
         for window in windows { window.orderOut(nil) }
@@ -174,5 +247,6 @@ final class DimOverlay {
         windows.removeAll()
         hintLabels.removeAll()
         hintRevealed = false
+        mode = .active
     }
 }
