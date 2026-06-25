@@ -32,3 +32,9 @@ There is no per-device or per-class selectivity.
   rather than block on.
 - An external mouse cannot be exempted — locking the trackpad also freezes a plugged-in
   mouse. Accepted; matches the "freeze the surface I'm wiping" intent.
+- **Swallowing `mouseMoved` does not freeze the on-screen cursor.** Consuming move events in
+  the tap stops apps from *receiving* movement, but the WindowServer still glides the visible
+  cursor straight from raw HID input. Pointer lock therefore also calls
+  `CGAssociateMouseAndMouseCursorPosition(false)` to decouple the cursor from hardware
+  movement, and re-associates on session end. This is process-scoped and auto-reset by the OS
+  if Scrub dies, so it preserves fail-open ([ADR-0001](0001-fail-open-failsafe-philosophy.md)).

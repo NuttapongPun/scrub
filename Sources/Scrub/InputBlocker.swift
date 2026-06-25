@@ -37,6 +37,23 @@ final class InputBlocker {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
+    /// Whether this session locked the pointer, so `stop()` knows to re-associate the cursor.
+    /// Swallowing `mouseMoved` stops apps from *receiving* movement but the WindowServer still
+    /// glides the visible cursor from raw HID input. Disassociating the cursor alone is flaky
+    /// (events flowing through the tap can silently re-associate it), so we *also* warp the
+    /// cursor back to `lockedCursorPosition` on every movement event — see `handle`.
+    private var pointerDecoupled = false
+
+    /// Where the cursor is pinned while the pointer is locked, in global display coordinates
+    /// (top-left origin, matching `CGEvent.location` / `CGWarpMouseCursorPosition`).
+    private var lockedCursorPosition: CGPoint = .zero
+
+    /// Movement event types that visibly drag the cursor and so must be warped back when the
+    /// pointer is locked. Clicks and scroll don't move the cursor, so they only need swallowing.
+    private static let cursorMovingTypes: Set<CGEventType> = [
+        .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+    ]
+
     /// App Nap throttles an accessory app's timers and defers its main-queue work, which makes
     /// the hard-unlock timer fire late and the chord-unlock dispatch lag. Hold a latency-
     /// critical activity assertion for the lifetime of a session to keep both prompt.
@@ -101,6 +118,15 @@ final class InputBlocker {
             reason: "Scrub cleaning session active"
         )
 
+        if lockPointer {
+            // Freeze the visible cursor: consuming move events isn't enough, the WindowServer
+            // still moves the cursor from raw HID input (ADR-0004). Pin it where it is now and
+            // both decouple it from hardware and warp it back on every move (see `handle`).
+            lockedCursorPosition = CGEvent(source: nil)?.location ?? .zero
+            CGAssociateMouseAndMouseCursorPosition(0)
+            pointerDecoupled = true
+        }
+
         eventTap = tap
         runLoopSource = source
         log.info("Input lock started (pointer locked: \(lockPointer, privacy: .public))")
@@ -118,6 +144,10 @@ final class InputBlocker {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
             eventTap = nil
+        }
+        if pointerDecoupled {
+            CGAssociateMouseAndMouseCursorPosition(1)
+            pointerDecoupled = false
         }
         if let activity {
             ProcessInfo.processInfo.endActivity(activity)
@@ -144,6 +174,12 @@ final class InputBlocker {
                 log.info("Unlock chord matched")
                 DispatchQueue.main.async { [weak self] in self?.end(reason: .chord) }
             }
+        }
+
+        // Pointer locked: pin the cursor. Disassociation can lapse as events flow, so warp it
+        // back to the locked position on every movement event before swallowing (ADR-0004).
+        if pointerDecoupled && Self.cursorMovingTypes.contains(type) {
+            CGWarpMouseCursorPosition(lockedCursorPosition)
         }
 
         // Input is locked: swallow every tapped event — every key event, and (when pointer
