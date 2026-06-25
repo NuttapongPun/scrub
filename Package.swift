@@ -10,6 +10,11 @@ let package = Package(
         .executableTarget(
             name: "Scrub",
             path: "Sources/Scrub"
+        ),
+        .testTarget(
+            name: "ScrubTests",
+            dependencies: ["Scrub"],
+            path: "Tests/ScrubTests"
         )
     ]
 )
