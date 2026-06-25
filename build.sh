@@ -50,6 +50,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <!-- Accessory app: menu-bar only, no Dock icon. -->
     <key>LSUIElement</key>
     <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 NuttapongPun. Licensed under the GNU General Public License v3.0.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>
