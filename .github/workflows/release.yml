@@ -1,0 +1,67 @@
+name: Release
+
+# A pushed version tag (e.g. v1.0.0) becomes a downloadable GitHub Release (issue #12).
+# CI builds Scrub.app with the version derived from the tag, zips it, computes its SHA256,
+# and publishes the zip with the checksum in the notes. Unsigned / ad-hoc — no secrets needed;
+# a Developer ID signing step (#2) slots in later via SCRUB_SIGN_IDENTITY in build.sh.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Strip the leading "v": v1.0.0 -> 1.0.0 (CFBundleShortVersionString).
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build Scrub.app
+        env:
+          SCRUB_VERSION: ${{ steps.version.outputs.version }}
+          SCRUB_BUILD: ${{ github.run_number }}
+        run: ./build.sh
+
+      - name: Package + checksum
+        id: package
+        run: |
+          ZIP="Scrub-${{ steps.version.outputs.tag }}.zip"
+          # ditto preserves the .app bundle structure (vs. plain zip).
+          ditto -c -k --sequesterRsrc --keepParent Scrub.app "$ZIP"
+          SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        run: |
+          cat > RELEASE_NOTES.md <<EOF
+          ## Scrub ${{ steps.version.outputs.tag }}
+
+          Unsigned / ad-hoc build. On first launch macOS Gatekeeper will warn — right-click the
+          app and choose **Open**, then grant **Accessibility** permission so Scrub can lock input.
+
+          ### Checksum
+          \`\`\`
+          SHA256 (${{ steps.package.outputs.zip }}) = ${{ steps.package.outputs.sha }}
+          \`\`\`
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "${{ steps.package.outputs.zip }}" \
+            --title "Scrub ${{ steps.version.outputs.tag }}" \
+            --notes-file RELEASE_NOTES.md

@@ -11,6 +11,15 @@ CONFIG="${1:-release}"
 APP="Scrub.app"
 BUNDLE_ID="com.nuttapongpun.scrub"
 
+# Version flows from the environment so the release pipeline can derive it from the git tag
+# (issue #12). Falls back to dev defaults for local builds.
+SHORT_VERSION="${SCRUB_VERSION:-0.1.0}"
+BUILD_VERSION="${SCRUB_BUILD:-1}"
+
+# Signing identity. Defaults to ad-hoc ("-") so local/CI builds need no secrets; a Developer ID
+# step (#2) slots in by exporting SCRUB_SIGN_IDENTITY without touching the rest of this script.
+SIGN_IDENTITY="${SCRUB_SIGN_IDENTITY:--}"
+
 echo "Building Scrub ($CONFIG)…"
 swift build -c "$CONFIG"
 
@@ -42,9 +51,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>$SHORT_VERSION</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$BUILD_VERSION</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <!-- Accessory app: menu-bar only, no Dock icon. -->
@@ -60,8 +69,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad-hoc sign so the Accessibility grant sticks to a stable code identity across launches.
-codesign --force --sign - "$APP" >/dev/null 2>&1 || \
-    echo "warning: ad-hoc codesign failed; Accessibility grant may not persist."
+# Sign so the Accessibility grant sticks to a stable code identity across launches. Ad-hoc
+# ("-") by default; a real Developer ID identity slots in via SCRUB_SIGN_IDENTITY (#2).
+codesign --force --sign "$SIGN_IDENTITY" "$APP" >/dev/null 2>&1 || \
+    echo "warning: codesign ($SIGN_IDENTITY) failed; Accessibility grant may not persist."
 
-echo "Built $APP"
+echo "Built $APP ($SHORT_VERSION build $BUILD_VERSION)"
