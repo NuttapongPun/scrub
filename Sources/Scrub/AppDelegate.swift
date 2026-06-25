@@ -15,13 +15,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         title: "Lock Pointer (Trackpad & Mouse)",
         action: #selector(toggleLockPointer), keyEquivalent: ""
     )
+    private let dimItem = NSMenuItem(
+        title: "Dim Screen While Cleaning",
+        action: #selector(toggleDim), keyEquivalent: ""
+    )
 
     /// Whether the next session should also lock the pointer (ADR-0004). A simple in-memory
     /// menu toggle for this slice; persistence and a configurable default land in issue #6.
     /// Read at session start, so toggling mid-session has no effect on the running session.
     private var lockPointerEnabled = false
 
+    /// Whether the next session blacks out every display (ADR-0006). A simple in-memory menu
+    /// toggle for this slice; persistence lands in issue #6. Read at session start, like
+    /// `lockPointerEnabled`. Defaults on — dimming is the headline behavior.
+    private var dimEnabled = true
+
     private let inputBlocker = InputBlocker()
+    private let dimOverlay = DimOverlay()
+
+    /// Background timing for the running session (ADR-0006). Set at start, read once on end to
+    /// show the total cleaning time; `nil` when no session is active. Never rendered live.
+    private var sessionClock: SessionClock?
     // A GCD timer, not an NSTimer: it wakes the run loop at its deadline on its own, so it
     // fires on time even while the app sits idle for the full window with no input events.
     private var hardUnlockTimer: DispatchSourceTimer?
@@ -33,6 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         inputBlocker.onSessionEnd = { [weak self] reason in
             self?.handleSessionEnd(reason)
+        }
+        inputBlocker.onKeyActivity = { [weak self] in
+            self?.dimOverlay.revealStopHint()
         }
 
         // ADR-0003: gate on Accessibility at launch. Untrusted → guide the user, then require
@@ -54,6 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lockPointerItem.target = self
         lockPointerItem.state = lockPointerEnabled ? .on : .off
         menu.addItem(lockPointerItem)
+        dimItem.target = self
+        dimItem.state = dimEnabled ? .on : .off
+        menu.addItem(dimItem)
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
@@ -65,10 +85,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateMenu() {
         cleaningItem.title = isCleaning ? "Stop Cleaning" : "Start Cleaning"
         lockPointerItem.state = lockPointerEnabled ? .on : .off
+        dimItem.state = dimEnabled ? .on : .off
     }
 
     @objc private func toggleLockPointer() {
         lockPointerEnabled.toggle()
+        updateMenu()
+    }
+
+    @objc private func toggleDim() {
+        dimEnabled.toggle()
         updateMenu()
     }
 
@@ -109,13 +135,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer.resume()
         hardUnlockTimer = timer
 
+        // Background-only timing (ADR-0006): start the clock; the total is shown on end.
+        sessionClock = SessionClock()
+        if dimEnabled {
+            dimOverlay.start()
+        }
+
         updateMenu()
     }
 
     private func handleSessionEnd(_ reason: EndReason) {
         hardUnlockTimer?.cancel()
         hardUnlockTimer = nil
+
+        // Read the background timer once, on end, and show the total cleaning time (issue #5).
+        let totalText = sessionClock?.totalText()
+        sessionClock = nil
         updateMenu()
+
+        if dimOverlay.isActive {
+            // Surface the total on the blackout, then fade it out (ADR-0006).
+            dimOverlay.finish(totalText: totalText ?? "")
+        } else if let totalText {
+            showTotalCleaningTime(totalText)
+        }
+    }
+
+    /// Shows the session's total cleaning time when there's no overlay to host it (dim off).
+    private func showTotalCleaningTime(_ text: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Cleaning complete"
+        alert.informativeText = text
+        alert.runModal()
     }
 
     // MARK: - Accessibility (ADR-0003)
@@ -157,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quit() {
         // Fail-open: release input before terminating.
         inputBlocker.forceEnd(reason: .manual)
+        dimOverlay.stop()   // drop the blackout at once; no summary on quit
         NSApplication.shared.terminate(nil)
     }
 }

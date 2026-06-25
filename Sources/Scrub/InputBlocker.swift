@@ -34,6 +34,11 @@ final class InputBlocker {
     /// the time this fires.
     var onSessionEnd: ((EndReason) -> Void)?
 
+    /// Called on the main thread on each key press while locked, so the dim overlay can reveal
+    /// its stop-hint immediately on key activity (ADR-0006). The keyboard stays locked — this
+    /// is observation only, and the overlay de-dupes repeated calls.
+    var onKeyActivity: (() -> Void)?
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -174,6 +179,8 @@ final class InputBlocker {
                 log.info("Unlock chord matched")
                 DispatchQueue.main.async { [weak self] in self?.end(reason: .chord) }
             }
+            // Any key press is "key activity": let the overlay surface the stop-hint at once.
+            DispatchQueue.main.async { [weak self] in self?.onKeyActivity?() }
         }
 
         // Pointer locked: pin the cursor. Disassociation can lapse as events flow, so warp it
