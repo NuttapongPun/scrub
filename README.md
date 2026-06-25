@@ -105,3 +105,11 @@ auto-unlock grace (**5 minutes**) currently use fixed defaults.
   time.
 - Adjust how dark the screen goes.
 - Launch at login.
+
+---
+
+## License
+
+Scrub is licensed under the [GNU General Public License v3.0](LICENSE). You are free to use,
+modify, and redistribute it under the terms of that license; derivative works must also be
+released under the GPLv3.
