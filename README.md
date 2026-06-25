@@ -38,6 +38,30 @@ cleaning time when you're done, then gets out of the way.
 
 ---
 
+## Install
+
+There's no Homebrew cask yet. The quickest way is the install script, which downloads the
+latest release and drops **Scrub.app** into `/Applications`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/NuttapongPun/scrub/main/install.sh | bash
+```
+
+Because it fetches over `curl` rather than a browser, the download carries no Gatekeeper
+quarantine flag, so there's no right-click-to-Open step. On first launch, grant
+**Accessibility** permission when prompted — see [Requirements](#requirements).
+
+### Manual download
+
+Prefer to do it by hand? Grab the latest `Scrub-vX.Y.Z.zip` from the
+[Releases page](https://github.com/NuttapongPun/scrub/releases), optionally verify it against
+the SHA256 in the release notes (`shasum -a 256 Scrub-vX.Y.Z.zip`), then unzip and move
+**Scrub.app** to `/Applications`. The build is **unsigned**, so the first time you open it
+**right-click (or Control-click) Scrub.app → Open** and confirm — double-clicking will be
+blocked by Gatekeeper. You only need to do this once.
+
+---
+
 ## How to use
 
 1. Launch Scrub — a 🧽 icon appears in the menu bar.
