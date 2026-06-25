@@ -44,16 +44,37 @@ final class InputBlocker {
 
     var isLocked: Bool { eventTap != nil }
 
-    /// Installs the tap and begins swallowing keyboard input. Returns `false` if the tap
-    /// could not be created (e.g. Accessibility not granted), in which case nothing is locked.
+    /// All pointer event classes the tap must swallow when the pointer is locked. The tap
+    /// can't distinguish the built-in trackpad from an external mouse, nor is any class
+    /// exempted — wiping a trackpad produces movement, clicks, and scroll alike (ADR-0004).
+    private static let pointerEventTypes: [CGEventType] = [
+        .mouseMoved,
+        .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+        .leftMouseDown, .leftMouseUp,
+        .rightMouseDown, .rightMouseUp,
+        .otherMouseDown, .otherMouseUp,
+        .scrollWheel,
+    ]
+
+    /// Installs the tap and begins swallowing keyboard input. When `lockPointer` is true, the
+    /// tap also swallows all pointer events from all devices (ADR-0004); the unlock chord is
+    /// then the only exit, since the menu-bar Quit becomes unreachable. Returns `false` if the
+    /// tap could not be created (e.g. Accessibility not granted), in which case nothing is
+    /// locked.
     @discardableResult
-    func start() -> Bool {
+    func start(lockPointer: Bool) -> Bool {
         guard eventTap == nil else { return true }
 
-        let mask: CGEventMask =
+        var mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue) |
             (1 << CGEventType.keyUp.rawValue) |
             (1 << CGEventType.flagsChanged.rawValue)
+
+        if lockPointer {
+            for type in Self.pointerEventTypes {
+                mask |= (1 << type.rawValue)
+            }
+        }
 
         let refcon = Unmanaged.passUnretained(self).toOpaque()
 
@@ -82,7 +103,7 @@ final class InputBlocker {
 
         eventTap = tap
         runLoopSource = source
-        log.info("Keyboard lock started")
+        log.info("Input lock started (pointer locked: \(lockPointer, privacy: .public))")
         return true
     }
 
@@ -125,7 +146,8 @@ final class InputBlocker {
             }
         }
 
-        // Keyboard is locked: swallow every key event.
+        // Input is locked: swallow every tapped event — every key event, and (when pointer
+        // lock is on) every pointer event in `pointerEventTypes` (ADR-0004).
         return nil
     }
 

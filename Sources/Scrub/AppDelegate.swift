@@ -11,6 +11,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let cleaningItem = NSMenuItem(
         title: "Start Cleaning", action: #selector(toggleCleaning), keyEquivalent: ""
     )
+    private let lockPointerItem = NSMenuItem(
+        title: "Lock Pointer (Trackpad & Mouse)",
+        action: #selector(toggleLockPointer), keyEquivalent: ""
+    )
+
+    /// Whether the next session should also lock the pointer (ADR-0004). A simple in-memory
+    /// menu toggle for this slice; persistence and a configurable default land in issue #6.
+    /// Read at session start, so toggling mid-session has no effect on the running session.
+    private var lockPointerEnabled = false
 
     private let inputBlocker = InputBlocker()
     // A GCD timer, not an NSTimer: it wakes the run loop at its deadline on its own, so it
@@ -42,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         cleaningItem.target = self
         menu.addItem(cleaningItem)
+        lockPointerItem.target = self
+        lockPointerItem.state = lockPointerEnabled ? .on : .off
+        menu.addItem(lockPointerItem)
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
@@ -52,13 +64,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateMenu() {
         cleaningItem.title = isCleaning ? "Stop Cleaning" : "Start Cleaning"
+        lockPointerItem.state = lockPointerEnabled ? .on : .off
+    }
+
+    @objc private func toggleLockPointer() {
+        lockPointerEnabled.toggle()
+        updateMenu()
     }
 
     // MARK: - Cleaning session
 
     @objc private func toggleCleaning() {
         if isCleaning {
-            // Convenience stop via the still-free trackpad; the chord is the universal exit.
+            // Reachable only when the pointer is *not* locked; with pointer lock on the menu
+            // can't be opened, so the chord is the only exit (ADR-0004).
             inputBlocker.forceEnd(reason: .manual)
         } else {
             startCleaning()
@@ -73,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        guard inputBlocker.start() else {
+        guard inputBlocker.start(lockPointer: lockPointerEnabled) else {
             showAlert(
                 title: "Couldn't start cleaning",
                 message: "Scrub couldn't install the input lock. Make sure Accessibility "
