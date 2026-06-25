@@ -4,7 +4,7 @@ import Foundation
 /// cleaning session starts and computes its elapsed duration. The duration is **never
 /// rendered live** — it is read once, when the session ends, to surface the user the *total*
 /// cleaning time ("how long did this clean take"). This type is also the natural seam for
-/// session history (issue #7), which appends `{ start, duration, endedBy }` on each end.
+/// session history (issue #8), which appends `{ start, duration, endedBy }` on each end.
 struct SessionClock {
 
     /// When the session started. Captured once at `start`; elapsed time is derived on demand.
@@ -27,13 +27,19 @@ struct SessionClock {
     /// Formats a duration as `Cleaned for <m>m <ss>s`, surfacing hours only when present so
     /// the common short clean stays terse.
     static func format(_ duration: TimeInterval) -> String {
+        "Cleaned for \(compact(duration))"
+    }
+
+    /// Formats a duration compactly as `<m>m <ss>s` (or `<h>h <mm>m <ss>s` once an hour is
+    /// reached), without the "Cleaned for" prefix — for history rows and aggregate totals.
+    static func compact(_ duration: TimeInterval) -> String {
         let total = max(0, Int(duration.rounded()))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let seconds = total % 60
         if hours > 0 {
-            return "Cleaned for \(hours)h \(String(format: "%02d", minutes))m \(String(format: "%02d", seconds))s"
+            return "\(hours)h \(String(format: "%02d", minutes))m \(String(format: "%02d", seconds))s"
         }
-        return "Cleaned for \(minutes)m \(String(format: "%02d", seconds))s"
+        return "\(minutes)m \(String(format: "%02d", seconds))s"
     }
 }

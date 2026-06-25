@@ -32,6 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let inputBlocker = InputBlocker()
     private let dimOverlay = DimOverlay()
 
+    /// Append-only log of completed cleans (ADR-0007). Written once on each genuine session
+    /// end, read on demand to populate the "History…" view.
+    private let sessionHistory = SessionHistory()
+
     /// Background timing for the running session (ADR-0006). Set at start, read once on end to
     /// show the total cleaning time; `nil` when no session is active. Never rendered live.
     private var sessionClock: SessionClock?
@@ -86,6 +90,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dimItem.target = self
         menu.addItem(dimItem)
         menu.addItem(.separator())
+        let historyItem = NSMenuItem(
+            title: "History…", action: #selector(showHistory), keyEquivalent: ""
+        )
+        historyItem.target = self
+        menu.addItem(historyItem)
+        menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         )
@@ -115,6 +125,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.dim.toggle()
         updateMenu()
     }
+
+    // MARK: - History (ADR-0007 / issue #8)
+
+    /// Surfaces the session history: aggregate totals plus the most recent cleans, newest
+    /// first. Read on demand so a clean never pays for history I/O.
+    @objc private func showHistory() {
+        let records = sessionHistory.records()
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Cleaning history"
+        alert.informativeText = Self.historyText(records)
+        alert.runModal()
+    }
+
+    /// Renders the history body: a summary line (session count + total cleaning time) followed
+    /// by up to the 10 most recent rows, newest first, each as `<date & time> · <duration>`.
+    private static func historyText(_ records: [SessionRecord]) -> String {
+        guard !records.isEmpty else {
+            return "No cleans recorded yet. Your completed cleaning sessions will appear here."
+        }
+
+        let total = records.reduce(0) { $0 + $1.duration }
+        let count = records.count
+        let summary = "\(count) clean\(count == 1 ? "" : "s") · \(SessionClock.compact(total)) total"
+
+        let recent = records.suffix(10).reversed().map { record in
+            "\(historyDateFormatter.string(from: record.start)) · \(SessionClock.compact(record.duration))"
+        }
+        return summary + "\n\n" + recent.joined(separator: "\n")
+    }
+
+    private static let historyDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     // MARK: - Cleaning session
 
@@ -206,6 +253,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Read the background timer once, on end, and show the total cleaning time (issue #5).
         let totalText = sessionClock?.totalText()
+
+        // Append to the session history (ADR-0007 / issue #8). Only genuine cleaning exits are
+        // logged — `manual` (Quit / menu-stop) maps to no history cause and is skipped.
+        if let clock = sessionClock, let cause = reason.historyCause {
+            sessionHistory.append(
+                SessionRecord(
+                    start: clock.startedAt, duration: clock.elapsed(), endedBy: cause
+                )
+            )
+        }
+
         sessionClock = nil
         updateMenu()
 

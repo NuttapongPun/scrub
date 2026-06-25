@@ -11,6 +11,18 @@ enum EndReason {
     case forceEnd   // failsafe force-ended (unacknowledged reminder grace, ADR-0005)
     case failOpen   // OS force-disabled the tap (ADR-0001)
     case manual     // app is quitting
+
+    /// How this end maps onto the recorded session-history `endedBy` vocabulary (ADR-0007).
+    /// `manual` (the Quit / menu-stop escape hatch) is intentionally *not* a history cause —
+    /// the log records only genuine cleaning-mode exits, so it returns `nil` and is skipped.
+    var historyCause: SessionEndCause? {
+        switch self {
+        case .chord: return .chord
+        case .forceEnd: return .forceEnd
+        case .failOpen: return .failOpen
+        case .manual: return nil
+        }
+    }
 }
 
 /// Installs a `CGEventTap` that swallows keyboard input while tracking the physical keycodes
