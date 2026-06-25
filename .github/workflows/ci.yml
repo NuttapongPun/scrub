@@ -1,0 +1,23 @@
+name: CI
+
+# Build + test on every PR (and pushes to main) so the pure session logic stays
+# regression-protected — the app's contract is "you can always get out" (issue #13).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test

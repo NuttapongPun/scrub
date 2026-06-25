@@ -16,13 +16,20 @@ and pointer lock (ADR-0002/0004), the ⌘⌥Q unlock chord, the total-blackout d
 stop-hint (ADR-0006), the dead-man's-switch reminder + O+K acknowledgement + fail-open
 force-end (ADR-0001/0005), persisted lock selections, and JSON session history (ADR-0007).
 
+CI: a `ScrubTests` target (`swift test`) covers the pure session logic — `SessionClock.compact`,
+`SessionHistory` round-trip/corrupt-file, and `EndReason.historyCause`. `.github/workflows/ci.yml`
+runs `swift build && swift test` on PRs; `.github/workflows/release.yml` turns a pushed `v*` tag
+into an unsigned GitHub Release (zip + SHA256), with the bundle version derived from the tag.
+
 Not yet built (defaults are hardcoded): a settings UI for the unlock chord, the check-in and
 grace intervals, and the dim level; launch-at-login. Distribution is ad-hoc signed — no
-Developer ID signing, notarization, or Homebrew cask yet.
+Developer ID signing, notarization, or Homebrew cask yet (the release pipeline produces an
+unsigned build; `build.sh` exposes `SCRUB_SIGN_IDENTITY` as the slot for Developer ID, #2).
 
 Layout: Swift Package Manager building a `Scrub.app` bundle via `build.sh`. `Sources/Scrub/`
 holds `main.swift`, `AppDelegate.swift`, `InputBlocker.swift`, `DimOverlay.swift`,
-`Settings.swift`, `SessionClock.swift`, and `SessionHistory.swift`.
+`Settings.swift`, `SessionClock.swift`, and `SessionHistory.swift`. Tests live in
+`Tests/ScrubTests/`.
 
 ## Build & run
 
