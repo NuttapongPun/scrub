@@ -47,7 +47,8 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   See [ADR-0001](docs/adr/0001-fail-open-failsafe-philosophy.md).
 
 - **Check-in interval** — how long a session stays locked + dimmed before the reminder
-  fires (default 10 min). Reset every time the user acknowledges. Configurable.
+  fires (default 10 min). Reset every time the user acknowledges. Configurable via
+  `UserDefaults` (no settings UI yet).
 
 - **Reminder stage** — a recurring **dead-man's-switch** liveness check (not a "forgot the
   chord" notice): at each check-in interval the screen brightens and a pop-up asks "Still
@@ -60,7 +61,7 @@ these concepts, use the term exactly as defined here. Don't drift to synonyms.
   falsely keep a session locked.
 
 - **Acknowledgement grace** — how long the reminder may stay unacknowledged before force-end
-  (default 5 min). Configurable.
+  (default 5 min). Configurable via `UserDefaults` (no settings UI yet).
 
 - **Hard-unlock / force-end** — the last-resort failsafe: if the reminder goes unacknowledged
   for the full grace window, Scrub force-releases all locks and ends the session no matter

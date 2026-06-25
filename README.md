@@ -90,7 +90,18 @@ You can **never** be locked out of your own Mac:
 
 ## Settings
 
-- Choose which inputs to lock per session.
-- Configure the unlock chord, the "still cleaning?" interval, and the auto-unlock time.
+Everything lives in the menu-bar menu:
+
+- **Choose what to lock** per session — the **keyboard**, the **trackpad / mouse**, and the
+  **screen blackout**, each toggled independently. Your choices are remembered for next time.
+- **History…** — review your past cleans and total cleaning time.
+
+The unlock chord (**⌘ ⌥ Q**), the "still cleaning?" interval (**10 minutes**), and the
+auto-unlock grace (**5 minutes**) currently use fixed defaults.
+
+### Planned
+
+- A settings screen to customize the unlock chord, the check-in interval, and the auto-unlock
+  time.
 - Adjust how dark the screen goes.
 - Launch at login.

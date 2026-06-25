@@ -7,21 +7,28 @@ source of truth.
 
 ## Status
 
-Pre-implementation. No source code exists yet. The design is settled in `CONTEXT.md` and
-`docs/adr/0001`–`0007`; read those before implementing — they override the README where they
-differ (the README describes behavior for end users, not internals). First milestone (M1):
-menu-bar app, Accessibility launch gate, `CGEventTap` keyboard lock, keycode unlock chord,
-and a single hardcoded fail-open hard-unlock timer — no dim, settings, or history yet.
+Implemented and building. `CONTEXT.md` and `docs/adr/0001`–`0007` remain the engineering
+source of truth; read those before changing behavior — they override the README where they
+differ (the README describes behavior for end users, not internals).
 
-Planned layout (per the README's original tech notes): Swift Package Manager building a
-`Scrub.app` bundle, with `Sources/Scrub/` split into `main.swift`, `AppDelegate.swift`,
-`InputBlocker.swift`, and `DimOverlay.swift`.
+Shipped: menu-bar app with the Accessibility launch gate (ADR-0003), `CGEventTap` keyboard
+and pointer lock (ADR-0002/0004), the ⌘⌥Q unlock chord, the total-blackout dim overlay with
+stop-hint (ADR-0006), the dead-man's-switch reminder + O+K acknowledgement + fail-open
+force-end (ADR-0001/0005), persisted lock selections, and JSON session history (ADR-0007).
+
+Not yet built (defaults are hardcoded): a settings UI for the unlock chord, the check-in and
+grace intervals, and the dim level; launch-at-login. Distribution is ad-hoc signed — no
+Developer ID signing, notarization, or Homebrew cask yet.
+
+Layout: Swift Package Manager building a `Scrub.app` bundle via `build.sh`. `Sources/Scrub/`
+holds `main.swift`, `AppDelegate.swift`, `InputBlocker.swift`, `DimOverlay.swift`,
+`Settings.swift`, `SessionClock.swift`, and `SessionHistory.swift`.
 
 ## Build & run
 
-Built with Swift Package Manager and wrapped into a `Scrub.app` bundle (planned `build.sh`).
-The app requires **Accessibility permission** to block input and therefore cannot be
-sandboxed or App Store distributed.
+`./build.sh` compiles with Swift Package Manager and wraps the binary into a runnable
+`Scrub.app` bundle (ad-hoc signed). The app requires **Accessibility permission** to block
+input and therefore cannot be sandboxed or App Store distributed.
 
 ## Commits
 
