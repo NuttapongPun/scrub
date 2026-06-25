@@ -1,13 +1,21 @@
 # AGENTS.md
 
 Scrub — a macOS menu-bar app for "cleaning mode" (locks keyboard/trackpad and dims the
-screen while wiping the machine). See `README.md` for full scope, features, and the failsafe
-design.
+screen while wiping the machine). `README.md` is the **user-facing** product page;
+`CONTEXT.md` (domain glossary) and `docs/adr/` (design decisions) are the **engineering**
+source of truth.
 
 ## Status
 
-Planning. No source code exists yet — `README.md` is the spec. The planned layout and tech
-stack live in the README; follow them when implementing.
+Pre-implementation. No source code exists yet. The design is settled in `CONTEXT.md` and
+`docs/adr/0001`–`0007`; read those before implementing — they override the README where they
+differ (the README describes behavior for end users, not internals). First milestone (M1):
+menu-bar app, Accessibility launch gate, `CGEventTap` keyboard lock, keycode unlock chord,
+and a single hardcoded fail-open hard-unlock timer — no dim, settings, or history yet.
+
+Planned layout (per the README's original tech notes): Swift Package Manager building a
+`Scrub.app` bundle, with `Sources/Scrub/` split into `main.swift`, `AppDelegate.swift`,
+`InputBlocker.swift`, and `DimOverlay.swift`.
 
 ## Build & run
 

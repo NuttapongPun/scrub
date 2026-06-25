@@ -1,151 +1,94 @@
 # Scrub — Mac Cleaning Mode 🧽
 
-> **Scrub** is the app name; "Mac Cleaning Mode" is the descriptive tagline used for the repo
-> title, website, and search. In the UI (menu bar, About) the app is just **Scrub**.
+A tiny macOS menu-bar app that puts your Mac into **cleaning mode** — it locks the keyboard,
+trackpad, and/or dims the screen so you can safely wipe the machine (or do your makeup at the
+desk) without typing garbage, moving the cursor, or triggering shortcuts.
 
-A tiny macOS menu-bar app that puts your Mac into a **cleaning mode** — it locks the
-keyboard, trackpad, and/or dims the screen so you can safely wipe the machine (or do your
-makeup at the desk) without triggering anything. It also tracks how long each cleaning
-session takes.
-
-To end a session, you press a **multi-key chord** (default `asdfjkl;` — all 8 keys at
-once). A single accidental key press won't unlock it, so wiping across the keyboard is safe.
-
-> Status: **planning** — this README defines the scope. Implementation has not started yet.
+To end a session you press a **multi-key chord** — by default the eight home-row keys
+`a s d f j k l ;` all at once. A stray swipe of a cloth can't trigger it, so wiping across
+the keyboard is always safe.
 
 ---
 
 ## Why
 
 When you clean a laptop you drag a cloth across the keys and trackpad, which types garbage,
-moves the cursor, triggers shortcuts, and can dismiss windows. Cleaning the screen while it's
-bright also makes smudges hard to see. Scrub freezes input and dims the display for the
-duration, then gets out of the way.
+moves the cursor, fires shortcuts, and dismisses windows. A bright screen also hides smudges.
+Scrub freezes input and blacks out the display for as long as you need, tells you your total
+cleaning time when you're done, then gets out of the way.
 
 ---
 
 ## Features
 
-- **Menu-bar app** — lives in the macOS menu bar, no Dock icon, no main window.
-- **Pick what to lock** before each session, via checkmark toggles:
-  - Lock **keyboard**
-  - Lock **trackpad / mouse**
-  - **Dim** the screen
-- **Start cleaning** — applies the selected locks and begins the session.
-- **On-screen overlay** — shows a large live timer and the "how to stop" hint, so you get
-  feedback even while input is frozen.
-- **Session timer** — tracks elapsed cleaning time; shows total when you finish.
-- **Safe unlock chord** — end the session only by pressing a configured set of keys
-  simultaneously (default `a s d f j k l ;`). Prevents accidental unlocks while wiping.
-- **Auto-unlock failsafe** — so you can never get stuck if you forget the chord:
-  - At a timeout (default **10 min**) the screen **brightens back to normal** and a
-    pop-up appears reminding you which keys to press to unlock.
-  - If the session is *still* locked a while after that (default **+5 min**), Scrub
-    **hard-unlocks automatically** and ends the session as a last resort.
+- **Lives in the menu bar** — no Dock icon, no windows in your way.
+- **Pick what to lock** before each session:
+  - Lock the **keyboard**
+  - Lock the **trackpad / mouse**
+  - **Black out** the screen
+- **Start cleaning** — applies your locks and blacks out the screen so smudges are easy to
+  see. After a moment a dim *"press `a s d f j k l ;` to stop"* hint fades in, so you always
+  know the way out.
+- **Cleaning time** — Scrub times each session and shows the **total when you finish**.
+- **Safe unlock chord** — end a session only by pressing a set of keys **simultaneously**
+  (default `a s d f j k l ;`). A chord, not a sequence, so partial or accidental contact
+  never unlocks.
+- **You can never get stuck** — see *Staying safe* below.
+- **History** — review your past cleans and total time from the menu.
 
 ---
 
-## How it works (high level)
+## How to use
 
-| Capability | Mechanism |
-|---|---|
-| Block keyboard + trackpad | A `CGEventTap` intercepts input events and swallows them while locked. |
-| Detect the unlock chord | The same tap watches key-down/up and tracks which keys are held; when **all** chord keys are down at once, the session ends. |
-| Dim the screen | A black, click-through overlay window is drawn across every display. The overlay also hosts the timer + stop-hint card. |
-| Track time | A 1-second timer updates the overlay and the menu-bar title. |
-| Auto-unlock failsafe | Two scheduled timers: a **reminder** timer (un-dims + shows the unlock pop-up) and a **hard-unlock** timer (force-ends the session). Both reset when a session starts. |
+1. Launch Scrub — a 🧽 icon appears in the menu bar.
+2. Click it and choose what to lock (keyboard / trackpad / black out the screen).
+3. Choose **Start Cleaning**. The screen goes dark and your selected input freezes.
+4. Wipe away — keys and the trackpad do nothing.
+5. To finish, press **`a s d f j k l ;` together**. Everything unlocks and Scrub shows your
+   total cleaning time.
 
-Because the event tap sees keys *before* swallowing them, the unlock chord works even while
-the keyboard is fully locked.
+---
 
-### Failsafe timeline
+## The unlock chord
 
-```
-Start ──────────────▶ 10 min ─────────────▶ 15 min
- locked & dimmed      brighten + show        hard auto-unlock
-                      "press a s d f j k l ;"  (session ends)
-                      pop-up; still locked     no matter what
-```
+- **Default:** `a s d f j k l ;` — the eight home-row keys, pressed at the same time.
+- It's matched by **key position**, so it works on any keyboard layout or language.
+- Chosen because it's nearly impossible to trigger by dragging a cloth, but trivial to do on
+  purpose with two hands.
 
-The reminder stage handles the common case — *you forgot the chord* — by making the screen
-visible again and telling you exactly which keys to press, without ending your session. The
-hard-unlock stage is the absolute backstop in case anything (even chord detection) goes wrong.
+---
+
+## Staying safe
+
+You can **never** be locked out of your own Mac:
+
+- **The "still cleaning?" check.** If a session runs long (default **10 minutes**), the
+  screen brightens and asks *"Still cleaning? press `O` + `K`."* Press **O and K together** to
+  keep going — the screen dims again and cleaning continues. This repeats for as long as you
+  keep confirming, so even a thorough clean is never cut short.
+- **Automatic unlock.** If no one confirms within a few minutes (default **5**), Scrub
+  assumes you've stepped away, **unlocks everything, and ends the session** on its own.
+- **Always fail-open.** If anything goes wrong — you quit Scrub, or macOS interrupts it —
+  input is released immediately. Locking is always best-effort; never trapping you is the
+  priority.
 
 ---
 
 ## Requirements
 
 - macOS 13 (Ventura) or later
-- Xcode / Swift toolchain (Swift 6.x)
-- **Accessibility permission** — required for the app to block input. macOS will prompt on
-  first run; grant it under **System Settings → Privacy & Security → Accessibility**.
+- **Accessibility permission** — required so Scrub can block input. On first launch macOS
+  will prompt you; grant access under **System Settings → Privacy & Security →
+  Accessibility**, then relaunch Scrub.
 
-> Note: Scrub cannot be sandboxed / App Store distributed, because blocking global input
-> requires Accessibility access. This is intended as a personal-use utility.
-
----
-
-## Tech stack
-
-- **Language:** Swift
-- **UI:** AppKit (`NSStatusItem` menu bar + borderless `NSWindow` overlay)
-- **Input control:** Core Graphics `CGEventTap`
-- **Permissions:** ApplicationServices (`AXIsProcessTrusted`)
-- **Build:** Swift Package Manager, wrapped into a `Scrub.app` bundle
+> Scrub is a personal-use utility. Because blocking global input requires Accessibility
+> access, it is not sandboxed or distributed through the App Store.
 
 ---
 
-## Usage (planned)
+## Settings
 
-1. Launch Scrub — a 🧽 icon appears in the menu bar.
-2. Click it and toggle what you want to lock (keyboard / trackpad / dim screen).
-3. Choose **Start Cleaning**.
-4. The screen dims and a timer appears. Wipe away — keys and trackpad do nothing.
-5. To finish, press **`a s d f j k l ;` together**. Locks release and the total time is shown.
-
----
-
-## The unlock chord
-
-- Default: `a s d f j k l ;` — the 8 home-row keys, pressed simultaneously.
-- Chosen because it's nearly impossible to trigger by dragging a cloth, but trivial to do
-  on purpose with two hands.
-- Rationale: a chord (not a sequence) means partial/accidental contact never unlocks.
-
----
-
-## Safety considerations
-
-- If both keyboard and trackpad are locked, the chord is the primary way out — so the chord
-  detection must be rock-solid, **and** the auto-unlock failsafe (above) guarantees you are
-  never permanently stuck even if you forget the chord or detection fails.
-- The event tap auto-recovers if macOS disables it (timeout), so it can't silently leave you
-  stuck.
-
----
-
-## Project layout (planned)
-
-```
-makeup-macbook/
-├── README.md
-├── Package.swift
-├── Info.plist
-├── build.sh                # builds Scrub.app and ad-hoc signs it
-└── Sources/
-    └── Scrub/
-        ├── main.swift          # app entry, accessory activation policy
-        ├── AppDelegate.swift   # menu bar, toggles, session orchestration
-        ├── InputBlocker.swift  # CGEventTap + chord detection
-        └── DimOverlay.swift    # dim windows + timer/hint card
-```
-
----
-
-## Roadmap / ideas
-
-- [ ] Configurable unlock chord
-- [ ] Configurable failsafe timeouts (reminder / hard-unlock)
-- [ ] Session history / total cleaning time stats
-- [ ] Adjustable dim level
-- [ ] Launch at login
+- Choose which inputs to lock per session.
+- Configure the unlock chord, the "still cleaning?" interval, and the auto-unlock time.
+- Adjust how dark the screen goes.
+- Launch at login.
