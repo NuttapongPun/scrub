@@ -43,10 +43,11 @@ cleaning time when you're done, then gets out of the way.
 ### Homebrew (recommended)
 
 ```sh
-brew install --cask --no-quarantine NuttapongPun/tap/scrub
+brew install --cask NuttapongPun/tap/scrub
 ```
 
-Upgrade later with `brew upgrade --cask scrub`.
+Upgrade later with `brew upgrade --cask scrub`. On first launch, allow Scrub through
+Gatekeeper — see [Requirements](#requirements).
 
 ### Install script
 
@@ -107,6 +108,9 @@ You can **never** be locked out of your own Mac:
 ## Requirements
 
 - macOS 11 (Big Sur) or later
+- **Gatekeeper allow** — Scrub isn't notarized yet, so the first time you open it macOS
+  blocks it. Right-click **Scrub.app → Open** and confirm (or allow it under **System
+  Settings → Privacy & Security**). You only do this once.
 - **Accessibility permission** — required so Scrub can block input. On first launch macOS
   will prompt you; grant access under **System Settings → Privacy & Security →
   Accessibility** (on macOS 12 and earlier, **System Preferences → Security & Privacy →
