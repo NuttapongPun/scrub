@@ -8,6 +8,10 @@ To end a session you press a **multi-key chord** — by default **⌘ + ⌥ + Q*
 modifiers, then press Q). A stray swipe of a cloth can't trigger it, so wiping across
 the keyboard is always safe.
 
+<p align="center">
+  <img src="docs/images/menu.png" alt="Scrub — Mac Cleaning Mode: a MacBook showing Scrub's menu-bar menu (Start Cleaning; Lock Keyboard, Lock Pointer, and Dim Screen While Cleaning toggles; History; Quit), beside the tagline 'Safely wipe your Mac without stray clicks, cursor movement, or accidental shortcuts' and an 'Exit with ⌘ + ⌥ + Q' badge" width="820">
+</p>
+
 ---
 
 ## Why
@@ -59,8 +63,8 @@ curl -fsSL https://raw.githubusercontent.com/NuttapongPun/scrub/main/install.sh 
 
 Grab the latest `Scrub-vX.Y.Z.zip` from the
 [Releases page](https://github.com/NuttapongPun/scrub/releases), unzip it, and move
-**Scrub.app** to your Applications folder. The first time you open it, right-click
-**Scrub.app → Open** and confirm.
+**Scrub.app** to your Applications folder. The first time you open it, macOS blocks it —
+see [Requirements](#requirements) for the **Open Anyway** steps.
 
 > **First launch:** grant **Accessibility** permission when prompted so Scrub can lock
 > input — see [Requirements](#requirements).
@@ -109,8 +113,17 @@ You can **never** be locked out of your own Mac:
 
 - macOS 11 (Big Sur) or later
 - **Gatekeeper allow** — Scrub isn't notarized yet, so the first time you open it macOS
-  blocks it. Right-click **Scrub.app → Open** and confirm (or allow it under **System
-  Settings → Privacy & Security**). You only do this once.
+  blocks it with *"Scrub Not Opened."* Click **Done** (not *Move to Trash*), then open
+  **System Settings → Privacy & Security**, scroll to *"Scrub was blocked…"*, and click
+  **Open Anyway**. You only do this once.
+
+<p align="center">
+  <img src="docs/images/gatekeeper-blocked.png" alt="macOS Gatekeeper dialog: Scrub Not Opened — Apple could not verify Scrub is free of malware. Buttons: Move to Trash, Done." height="320">
+  &nbsp;&nbsp;
+  <img src="docs/images/gatekeeper-open-anyway.png" alt="System Settings → Privacy & Security showing 'Scrub was blocked to protect your Mac' with an Open Anyway button." height="320">
+  <br>
+  <em>First launch: click <strong>Done</strong>, then <strong>Open Anyway</strong> under Privacy &amp; Security.</em>
+</p>
 - **Accessibility permission** — required so Scrub can block input. On first launch macOS
   will prompt you; grant access under **System Settings → Privacy & Security →
   Accessibility** (on macOS 12 and earlier, **System Preferences → Security & Privacy →
