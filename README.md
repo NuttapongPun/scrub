@@ -106,10 +106,11 @@ You can **never** be locked out of your own Mac:
 
 ## Requirements
 
-- macOS 13 (Ventura) or later
+- macOS 11 (Big Sur) or later
 - **Accessibility permission** — required so Scrub can block input. On first launch macOS
   will prompt you; grant access under **System Settings → Privacy & Security →
-  Accessibility**, then relaunch Scrub.
+  Accessibility** (on macOS 12 and earlier, **System Preferences → Security & Privacy →
+  Privacy → Accessibility**), then relaunch Scrub.
 
 > Scrub is a personal-use utility. Because blocking global input requires Accessibility
 > access, it is not sandboxed or distributed through the App Store.

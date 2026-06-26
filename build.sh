@@ -55,7 +55,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key>
     <string>$BUILD_VERSION</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>11.0</string>
     <!-- Accessory app: menu-bar only, no Dock icon. -->
     <key>LSUIElement</key>
     <true/>
