@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "Scrub",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v11)
     ],
     targets: [
         .executableTarget(
